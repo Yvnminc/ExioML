@@ -69,8 +69,8 @@ The file structure of this study is:
 ```
 
 ### data
-- **ExioML_factor_accounting_PxP.csv:** Factor accounting table in tabular format.
-- **ExioML_factor_accounting_IxI.csv:** Factor accounting table in graph format.
+- **ExioML_factor_accounting_PxP.csv:** Sector accounting table by Product.
+- **ExioML_factor_accounting_IxI.csv:** Sector accounting table by Industry.
 
 ### src
 - **data.py:** Data processing and loading.
