@@ -92,13 +92,13 @@ The file structure of this study is:
 
 ## Additional Information
 ### Citation
-More details of the dataset are introduced in our paper: ExioML: Eco-economic dataset for Machine Learning in Global Sectoral Sustainability accepted by ICLR 2024 Climate Change AI workshop.
+More details of the dataset are introduced in our paper: ExioML.
 
 ```
-@inproceedings{guo2024exioml,
+@article{guo2024exioml,
   title={ExioML: Eco-economic dataset for Machine Learning in Global Sectoral Sustainability},
-  author={Yanming, Guo and Jin, Ma},
-  booktitle={ICLR 2024 Workshop on Tackling Climate Change with Machine Learning},
+  author={Guo, Yanming and Guan, Charles and Ma, Jin},
+  journal={arXiv preprint arXiv:2406.09046},
   year={2024}
 }
 ```
