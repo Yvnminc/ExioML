@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "build"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exioml"
+version = "0.1.0"
+description = "Exiobase-derived emission factor loader with caching and CLI utilities"
+readme = "README.md"
+authors = [{name = "ExioML", email = "team@exioml.dev"}]
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+dependencies = [
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "requests>=2.31",
+  "fsspec>=2023.9.0",
+]
+keywords = ["exiobase", "emissions", "sustainability", "scope3", "mrio"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
+
+dynamic = []
+
+[project.optional-dependencies]
+polars = ["polars>=0.20"]
+arrow = ["pyarrow>=12.0"]
+
+[project.urls]
+Homepage = "https://github.com/exioml/exioml"
+"Bug Tracker" = "https://github.com/exioml/exioml/issues"
+
+[project.scripts]
+exioml = "exioml.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["exioml*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
