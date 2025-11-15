@@ -29,10 +29,19 @@ import os
 from typing import Iterable, List
 
 from .factors import load_factor, list_regions, list_years
+from .preprocessing import RegressionSplits, prepare_regression_splits
 from .training import TrainingResult, train
 
-__all__: List[str] = ["load_factor", "list_regions", "list_years", "train", "TrainingResult"]
-__version__ = "0.1.0"
+__all__: List[str] = [
+    "load_factor",
+    "list_regions",
+    "list_years",
+    "train",
+    "TrainingResult",
+    "prepare_regression_splits",
+    "RegressionSplits",
+]
+__version__ = "0.2.0"
 
 _logger = logging.getLogger("exioml")
 

@@ -1,5 +1,11 @@
 # Changelog
 
+# Changelog
+
+## [0.2.0] - 2024-XX-XX
+- 新增 `exioml.preprocessing.prepare_regression_splits`，复现论文 64/16/20 划分、min-max 归一化与 Leave-One-Out 编码流程。
+- `exioml` 包导出 `RegressionSplits` 元数据容器并更新 README 示例，方便在 PyPI 环境下直接复现实验设置。
+
 ## [0.1.0] - 2024-XX-XX
 - 初始化 `exioml` PyPI 包框架，提供 `load_factor`、`list_regions`、`list_years` API。
 - 新增 CLI：`python -m exioml --list-regions` 及 `exioml` 命令支持。

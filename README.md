@@ -13,17 +13,122 @@ The ExioML is developed on top of the high-quality open-source EE-MRIO dataset E
 
 Both factor accounting in tabular format and footprint network in graph structure are included in ExioML. We demonstrate a GHG emission regression task on a factor accounting table by comparing the performance between shallow and deep models. The result achieved the low Mean Squared Error (MSE). It quantified the sectoral GHG emission in terms of value-added, employment, and energy consumption, validating the proposed dataset's usability. The footprint network in ExioML is inherent in the multi-dimensional network structure of the MRIO framework and enables tracking resource flow between international sectors. Various promising research could be done by ExioML, such as predicting the embodied emission through international trade, estimation of regional sustainability transition, and the topological change of global trading networks based on historical trajectory. ExioML reduces the barrier and reduces the intensive data pre-processing for ML researchers with the ready-to-use features, simulates the corporation of ML and Eco-economic research for new algorithms, and provides analysis with new perspectives, contributing to making sound climate policy, and promotes global sustainable development.
 
-## Quickstart
+## PyPI Package Usage
+
+### Installation
+
+```bash
+pip install exioml
+```
+
+Development checkouts can be installed with `pip install -e .`, exposing the same API while reading the CSV assets from the repository `data/` directory or a custom path referenced through `EXIOML_DATA_DIR`.
+
+### Loading emission-factor tables
+
+```python
+from exioml import load_factor
+
+frame = load_factor(
+    schema="PxP",
+    years=[1995],
+    regions=["AT"],
+    columns=["value_added_meur", "employment_k", "energy_carrier_tj"],
+)
+print(frame.head().to_markdown(index=False))
+```
+
+Sample output:
+
+| schema   | region   | sector                  |   year |   ghg_emissions |   factor_value |   value_added_meur |   energy_carrier_tj |   employment_k |
+|:---------|:---------|:------------------------|-------:|----------------:|---------------:|-------------------:|--------------------:|---------------:|
+| PxP      | AT       | Wheat                   |   1995 |     4.03721e+08 |    4.03721e+08 |           173.076  |            1956.55  |       12.4647  |
+| PxP      | AT       | Cereal grains nec       |   1995 |     8.25645e+08 |    8.25645e+08 |           389.064  |            3520.85  |       24.8328  |
+| PxP      | AT       | Vegetables, fruit, nuts |   1995 |     2.7892e+08  |    2.7892e+08  |           830.191  |            2974.92  |       48.6157  |
+| PxP      | AT       | Oil seeds               |   1995 |     1.60796e+08 |    1.60796e+08 |           102.858  |             265.091 |        2.9306  |
+| PxP      | AT       | Sugar cane, sugar beet  |   1995 |     1.00478e+08 |    1.00478e+08 |            31.7525 |             219.926 |        3.14141 |
+
+`factor_value` mirrors the canonical greenhouse-gas column so downstream pipelines can rely on a stable field name regardless of the CSV header formatting.
+
+### Preparing regression-ready splits
+
+Benchmark experiments rely on deterministic splits, normalization, and categorical encodings that you can recreate via `prepare_regression_splits`:
+
+```python
+from exioml import prepare_regression_splits
+
+splits = prepare_regression_splits(schema="PxP", years=[2010, 2011], regions=["US", "CN"])
+print(splits.train.shape, splits.validation.shape, splits.test.shape)
+```
+
+`prepare_regression_splits` returns a `RegressionSplits` dataclass with `.train`, `.validation`, and `.test` frames (64/16/20 split), plus metadata describing the `feature_columns` and `target_column` expected by training code. Continuous fields (`value_added_meur`, `employment_k`, `energy_carrier_tj`, `year`) are min-max scaled and `region`/`sector` receive leave-one-out encodings to prevent leakage.
+
+### Training baseline models
 
 ```python
 from exioml import load_factor, train
 
-frame = load_factor(schema="PxP", years=[2010], regions=["US"])
-result = train(frame, target="ghg_emissions", model="gdbt")
-print("Validation MSE:", result.test_score)
+df = load_factor(
+    schema="PxP",
+    years=[1995],
+    regions=["AT"],
+    columns=["value_added_meur", "employment_k", "energy_carrier_tj"],
+)
+result = train(
+    df,
+    target="factor_value",
+    model="gdbt",
+    features=["value_added_meur", "employment_k", "energy_carrier_tj"],
+    test_size=0.25,
+    random_state=7,
+)
+print(f"Hold-out {result.metric_name.upper()}: {result.test_score:.2e}")
 ```
 
-`exioml.train` 默认挑选目标列之外的所有特征，并提供 `model="gdbt" | "random_forest" | "ridge"` 预设以及与 scikit-learn 兼容的 `param_grid` 网格搜索，方便快速复现实验与调参。
+Typical metrics for the Austrian 1995 PxP slice are:
+
+```
+{
+  "train_mse": 2.16e17,
+  "test_mse": 3.58e17,
+  "best_params": null
+}
+```
+
+The magnitude reflects kilograms of CO₂-equivalent; apply logarithmic transforms if you need to stabilize error scales. The `train` helper accepts `model="gdbt" | "random_forest" | "ridge"` or any scikit-learn estimator instance, and `param_grid` enables a GridSearchCV run before exporting a `TrainingResult` container with prediction helpers and cross-validation diagnostics.
+
+### Command-line inspection
+
+The CLI exposed through `python -m exioml` mirrors the Python API for quick checks:
+
+```bash
+python -m exioml --list-regions --schema PxP | head -n 5
+AT
+AU
+BE
+BG
+BR
+
+python -m exioml --schema PxP --years 1995 --regions AT --columns value_added_meur energy_carrier_tj --limit 3
+schema region                  sector  year  ghg_emissions  factor_value  energy_carrier_tj  value_added_meur
+   PxP     AT                   Wheat  1995   4.037211e+08  4.037211e+08        1956.549408        173.076067
+   PxP     AT       Cereal grains nec  1995   8.256448e+08  8.256448e+08        3520.851032        389.064273
+   PxP     AT Vegetables, fruit, nuts  1995   2.789203e+08  2.789203e+08        2974.922772        830.191187
+```
+
+### Repository training entry points
+
+Use the in-repo orchestration utilities to replicate the workshop benchmarks without leaving the CLI:
+
+```bash
+python - <<'PY'
+from src.train import ShallowModel
+
+model = ShallowModel(type="pxp", data="clean")
+print(model.train(mode="val", iter=3))
+PY
+```
+
+`ShallowModel` and `DeepModel` respect the PxP/IxI splits implemented in `src/data.py`, shuffle features with seeded reproducibility, and report wall-clock time plus MSE so you can compare against the published GBDT and GANDALF baselines.
 
 ## Dataset
 
