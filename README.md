@@ -11,7 +11,19 @@ The ExioML is developed on top of the high-quality open-source EE-MRIO dataset E
 
 ![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/EE_MRIO.png)
 
- Both factor accounting in tabular format and footprint network in graph structure are included in ExioML. We demonstrate a GHG emission regression task on a factor accounting table by comparing the performance between shallow and deep models. The result achieved the low Mean Squared Error (MSE). It quantified the sectoral GHG emission in terms of value-added, employment, and energy consumption, validating the proposed dataset's usability. The footprint network in ExioML is inherent in the multi-dimensional network structure of the MRIO framework and enables tracking resource flow between international sectors. Various promising research could be done by ExioML, such as predicting the embodied emission through international trade, estimation of regional sustainability transition, and the topological change of global trading networks based on historical trajectory. ExioML reduces the barrier and reduces the intensive data pre-processing for ML researchers with the ready-to-use features, simulates the corporation of ML and Eco-economic research for new algorithms, and provides analysis with new perspectives, contributing to making sound climate policy, and promotes global sustainable development.
+Both factor accounting in tabular format and footprint network in graph structure are included in ExioML. We demonstrate a GHG emission regression task on a factor accounting table by comparing the performance between shallow and deep models. The result achieved the low Mean Squared Error (MSE). It quantified the sectoral GHG emission in terms of value-added, employment, and energy consumption, validating the proposed dataset's usability. The footprint network in ExioML is inherent in the multi-dimensional network structure of the MRIO framework and enables tracking resource flow between international sectors. Various promising research could be done by ExioML, such as predicting the embodied emission through international trade, estimation of regional sustainability transition, and the topological change of global trading networks based on historical trajectory. ExioML reduces the barrier and reduces the intensive data pre-processing for ML researchers with the ready-to-use features, simulates the corporation of ML and Eco-economic research for new algorithms, and provides analysis with new perspectives, contributing to making sound climate policy, and promotes global sustainable development.
+
+## Quickstart
+
+```python
+from exioml import load_factor, train
+
+frame = load_factor(schema="PxP", years=[2010], regions=["US"])
+result = train(frame, target="ghg_emissions", model="gdbt")
+print("Validation MSE:", result.test_score)
+```
+
+`exioml.train` 默认挑选目标列之外的所有特征，并提供 `model="gdbt" | "random_forest" | "ridge"` 预设以及与 scikit-learn 兼容的 `param_grid` 网格搜索，方便快速复现实验与调参。
 
 ## Dataset
 

@@ -29,8 +29,9 @@ import os
 from typing import Iterable, List
 
 from .factors import load_factor, list_regions, list_years
+from .training import TrainingResult, train
 
-__all__: List[str] = ["load_factor", "list_regions", "list_years"]
+__all__: List[str] = ["load_factor", "list_regions", "list_years", "train", "TrainingResult"]
 __version__ = "0.1.0"
 
 _logger = logging.getLogger("exioml")
