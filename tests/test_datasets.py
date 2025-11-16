@@ -10,6 +10,7 @@ import pytest
 from exioml import load_factor
 from exioml.datasets import (
     DatasetSplit,
+    LeaveOneOutEncoder,
     build_preprocessor,
     frame_to_xy,
     prepare_dataset,
@@ -76,6 +77,22 @@ def test_preprocess_xy_drop_strategy_aligns_y() -> None:
     assert hasattr(fitted, "transform")
 
 
+def test_leave_one_out_encoder_expected_values() -> None:
+    df = pd.DataFrame(
+        {
+            "region": ["US", "US", "CN", "CN", "CN"],
+            "value": [1, 2, 3, 4, 5],
+        }
+    )
+    y = np.array([10, 20, 30, 40, 50])
+
+    encoder = LeaveOneOutEncoder(columns=["region"])
+    encoded = encoder.fit_transform(df, y)
+
+    assert list(encoded.columns) == ["value", "region_looe"]
+    assert np.isclose(encoded["region_looe"].tolist(), [20, 10, 45, 40, 35]).all()
+
+
 def test_split_xy_handles_stratify_fallback() -> None:
     X = np.arange(8, dtype=float).reshape(4, 2)
     y = np.array([0, 0, 0, 1])
@@ -122,4 +139,29 @@ def test_prepare_dataset_with_load_factor(pxp_env: Path) -> None:
     assert total == len(kept_rows)
     assert splits.x_train.dtype == np.float32
     assert splits.x_train.shape[1] == len(feature_cols)
+    assert hasattr(preprocessor, "transform")
+
+
+def test_prepare_dataset_with_categoricals() -> None:
+    frame = pd.DataFrame(
+        {
+            "region": ["US", "US", "CN", "CN"],
+            "sector": ["A", "B", "A", "B"],
+            "value": [1.0, 2.0, 3.0, 4.0],
+            "target": [10.0, 20.0, 30.0, 40.0],
+        }
+    )
+
+    splits, preprocessor = prepare_dataset(
+        frame,
+        feature_cols=["region", "sector", "value"],
+        target_col="target",
+        categorical_cols=["region", "sector"],
+        ratios=(0.5, 0.25, 0.25),
+        stratify=False,
+        random_state=0,
+    )
+
+    assert splits.x_train.shape[1] == 3  # two encoded categoricals + numeric
+    assert splits.x_train.dtype == np.float32
     assert hasattr(preprocessor, "transform")

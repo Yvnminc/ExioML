@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -50,12 +51,106 @@ class DatasetSplit:
         }
 
 
+class LeaveOneOutEncoder(BaseEstimator, TransformerMixin):
+    """Lightweight leave-one-out target encoder for categorical columns."""
+
+    def __init__(
+        self,
+        columns: Sequence[str],
+        *,
+        suffix: str = "_looe",
+        drop_original: bool = True,
+        fill_value: str = "__missing__",
+    ) -> None:
+        self.columns = list(columns)
+        self.suffix = suffix
+        self.drop_original = drop_original
+        self.fill_value = fill_value
+        self._stats: dict = {}
+        self.global_mean_: float = 0.0
+        self.feature_names_in_: List[str] = []
+
+    def fit(self, X: pd.DataFrame, y=None):  # type: ignore[override]
+        df, y_series = self._prepare_inputs(X, y, require_y=True)
+        self.feature_names_in_ = list(df.columns)
+        self.global_mean_ = float(y_series.mean())
+        self._stats = {}
+        for column in self.columns:
+            grouped = (
+                pd.DataFrame({column: df[column], "target": y_series})
+                .groupby(column)["target"]
+                .agg(["sum", "count"])
+            )
+            self._stats[column] = grouped
+        return self
+
+    def fit_transform(self, X: pd.DataFrame, y=None, **fit_params):  # type: ignore[override]
+        self.fit(X, y)
+        df, y_series = self._prepare_inputs(X, y, require_y=True)
+        return self._encode(df, y_series, use_leave_one_out=True)
+
+    def transform(self, X: pd.DataFrame, y=None):  # type: ignore[override]
+        df, y_series = self._prepare_inputs(X, y, require_y=False)
+        return self._encode(df, y_series, use_leave_one_out=y_series is not None)
+
+    def _prepare_inputs(
+        self, X: pd.DataFrame, y, *, require_y: bool
+    ) -> Tuple[pd.DataFrame, Optional[pd.Series]]:
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("LeaveOneOutEncoder expects a pandas DataFrame input")
+        df = X.copy()
+        missing_cols = set(self.columns) - set(df.columns)
+        if missing_cols:
+            raise ValueError(f"Missing categorical columns: {sorted(missing_cols)}")
+        df[self.columns] = df[self.columns].fillna(self.fill_value)
+
+        y_series: Optional[pd.Series] = None
+        if y is not None:
+            y_arr = np.asarray(y).reshape(-1)
+            if len(y_arr) != len(df):
+                raise ValueError("X and y must align for leave-one-out encoding")
+            y_series = pd.Series(y_arr, index=df.index)
+        elif require_y:
+            raise ValueError("y is required to fit leave-one-out encoder")
+        return df, y_series
+
+    def _encoded_name(self, column: str) -> str:
+        return f"{column}{self.suffix}"
+
+    def _encode(
+        self, df: pd.DataFrame, y_series: Optional[pd.Series], *, use_leave_one_out: bool
+    ) -> pd.DataFrame:
+        result = df.copy()
+        for column in self.columns:
+            stats = self._stats.get(column)
+            if stats is None:
+                raise ValueError("Encoder has not been fitted")
+            mean_map = stats["sum"] / stats["count"]
+            if use_leave_one_out and y_series is not None:
+                sums = result[column].map(stats["sum"])
+                counts = result[column].map(stats["count"])
+                numerators = sums - y_series
+                denominators = counts - 1
+                encoded = numerators / denominators
+                encoded = encoded.where(denominators > 0, self.global_mean_)
+            else:
+                encoded = result[column].map(mean_map)
+            encoded = encoded.fillna(self.global_mean_).astype(np.float32)
+            result[self._encoded_name(column)] = encoded
+        if self.drop_original:
+            result = result.drop(columns=self.columns)
+        return result
+
+
 def frame_to_xy(
     df: pd.DataFrame,
     feature_cols: Sequence[str],
     target_col: str,
     dtype: np.dtype = np.float32,
     dropna: Optional[str] = "any",
+    *,
+    categorical_cols: Optional[Sequence[str]] = None,
+    as_frame: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Extract feature/target arrays from a DataFrame.
 
@@ -85,16 +180,29 @@ def frame_to_xy(
     if dropna not in ("any", "all", None):
         raise ValueError('dropna must be one of "any", "all", or None')
 
-    subset = df.loc[:, list(feature_cols) + [target_col]]
+    subset = df.loc[:, list(feature_cols) + [target_col]].copy()
     if dropna in ("any", "all"):
         subset = subset.dropna(how=dropna)
     if subset.empty:
         raise ValueError("Dataset is empty after applying NA handling")
 
-    X = subset.loc[:, feature_cols].to_numpy(dtype=dtype, copy=True)
+    categorical_cols = list(categorical_cols or [])
+    missing_cats = set(categorical_cols) - set(feature_cols)
+    if missing_cats:
+        raise ValueError(f"categorical_cols not in feature_cols: {sorted(missing_cats)}")
+
+    X_frame = subset.loc[:, feature_cols].copy()
+    numeric_cols = [col for col in feature_cols if col not in categorical_cols]
+    if dtype is not None and numeric_cols:
+        X_frame.loc[:, numeric_cols] = X_frame.loc[:, numeric_cols].astype(dtype)
+
     y = subset.loc[:, target_col].to_numpy(copy=True).reshape(-1)
-    if X.ndim != 2:
-        X = np.reshape(X, (X.shape[0], -1))
+    if as_frame or categorical_cols:
+        X = X_frame
+    else:
+        X = X_frame.to_numpy(dtype=dtype, copy=True)
+        if X.ndim != 2:
+            X = np.reshape(X, (X.shape[0], -1))
     if X.shape[0] != y.shape[0]:
         raise ValueError("X and y must contain the same number of samples")
     return X, y
@@ -106,6 +214,8 @@ def build_preprocessor(
     scaler_kwargs: Optional[dict] = None,
     imputer: Optional[str] = "drop",
     encoder=None,
+    categorical_cols: Optional[Sequence[str]] = None,
+    leave_one_out: bool = True,
 ) -> Pipeline:
     """Build a preprocessing pipeline with optional imputation and scaling.
 
@@ -113,7 +223,9 @@ def build_preprocessor(
     ``\"minmax\"`` the pipeline swaps to :class:`MinMaxScaler`. ``imputer=\"median\"``
     inserts a :class:`SimpleImputer` and otherwise rows are passed through
     untouched. A custom ``encoder`` (e.g. OneHotEncoder/ColumnTransformer) can
-    be inserted ahead of the scaler.
+    be inserted ahead of the scaler. When ``categorical_cols`` is provided the
+    default encoder becomes a leave-one-out target encoder so categorical
+    columns can be handled alongside numeric columns.
     """
 
     scaler_kwargs = scaler_kwargs or {}
@@ -130,14 +242,19 @@ def build_preprocessor(
     steps = []
     if imputer not in ("drop", "median", None):
         raise ValueError('imputer must be "drop", "median", or None')
-    if imputer == "median":
-        steps.append(("imputer", SimpleImputer(strategy="median")))
+
+    cat_columns = list(categorical_cols or [])
+    if encoder is None and cat_columns and leave_one_out:
+        encoder = LeaveOneOutEncoder(columns=cat_columns)
     if encoder is not None:
         steps.append(("encoder", encoder))
+    if imputer == "median":
+        steps.append(("imputer", SimpleImputer(strategy="median")))
     steps.append(("scaler", scaler))
 
     preprocessor = Pipeline(steps)
     preprocessor._exioml_dropna = imputer == "drop"  # type: ignore[attr-defined]
+    preprocessor._exioml_expect_dataframe = encoder is not None or bool(cat_columns)  # type: ignore[attr-defined]
     return preprocessor
 
 
@@ -151,32 +268,41 @@ def preprocess_xy(
     """Apply the preprocessing pipeline and keep X/y aligned."""
 
     preprocessor = preprocessor or build_preprocessor()
-    X_arr = np.asarray(X)
-    if X_arr.ndim != 2:
-        raise ValueError("X must be a 2D array")
+
+    if isinstance(X, pd.DataFrame):
+        X_frame = X.copy()
+    else:
+        X_arr = np.asarray(X)
+        if X_arr.ndim != 2:
+            raise ValueError("X must be a 2D array")
+        X_frame = pd.DataFrame(X_arr)
 
     y_arr = None
     if y is not None:
         y_arr = np.asarray(y).reshape(-1)
-        if y_arr.shape[0] != X_arr.shape[0]:
+        if y_arr.shape[0] != len(X_frame):
             raise ValueError("X and y must have compatible first dimensions")
 
     if getattr(preprocessor, "_exioml_dropna", False):  # type: ignore[attr-defined]
-        mask = ~pd.isna(X_arr).any(axis=1)
-        X_arr = X_arr[mask]
+        mask = ~X_frame.isna().any(axis=1)
+        X_frame = X_frame.loc[mask]
         if y_arr is not None:
             y_arr = y_arr[mask]
 
-    if X_arr.shape[0] == 0:
+    if X_frame.shape[0] == 0:
         raise ValueError("No samples left after NA handling")
 
-    if fit:
-        X_proc = preprocessor.fit_transform(X_arr)
-    else:
-        X_proc = preprocessor.transform(X_arr)
+    expects_frame = getattr(preprocessor, "_exioml_expect_dataframe", False)
+    preprocessor_input = X_frame if expects_frame else X_frame.to_numpy()
 
-    if hasattr(X_proc, "toarray"):  # sparse matrix support
+    if fit:
+        X_proc = preprocessor.fit_transform(preprocessor_input, y_arr)
+    else:
+        X_proc = preprocessor.transform(preprocessor_input)
+
+    if hasattr(X_proc, "toarray"):
         X_proc = X_proc.toarray()
+    X_proc = np.asarray(X_proc, dtype=np.float32)
     if X_proc.shape[0] == 0:
         raise ValueError("No samples produced during preprocessing")
     return X_proc, y_arr, preprocessor
@@ -267,6 +393,8 @@ def prepare_dataset(
     target_col: str,
     *,
     preprocessor: Optional[Pipeline] = None,
+    categorical_cols: Optional[Sequence[str]] = None,
+    leave_one_out: bool = True,
     ratios: Tuple[float, float, float] = DEFAULT_RATIOS,
     stratify: bool = True,
     random_state: int = 42,
@@ -275,7 +403,21 @@ def prepare_dataset(
 ) -> Tuple[DatasetSplit, Pipeline]:
     """One-stop entry to extract X/y, preprocess, and split."""
 
-    X, y = frame_to_xy(df, feature_cols, target_col, dtype=dtype, dropna=dropna)
+    categorical_cols = list(categorical_cols or [])
+    X, y = frame_to_xy(
+        df,
+        feature_cols,
+        target_col,
+        dtype=dtype,
+        dropna=dropna,
+        categorical_cols=categorical_cols,
+        as_frame=bool(categorical_cols),
+    )
+    if preprocessor is None:
+        preprocessor = build_preprocessor(
+            categorical_cols=categorical_cols,
+            leave_one_out=leave_one_out,
+        )
     X_proc, y_proc, fitted = preprocess_xy(
         X,
         y,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exioml"
-version = "0.2.0"
+version = "0.2.1"
 description = "Exiobase-derived emission factor loader with caching and CLI utilities"
 readme = "README.md"
 authors = [{name = "ExioML", email = "team@exioml.dev"}]

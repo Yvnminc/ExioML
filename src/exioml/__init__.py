@@ -31,6 +31,7 @@ from typing import Iterable, List
 from .factors import load_factor, list_regions, list_years
 from .datasets import (
     DatasetSplit,
+    LeaveOneOutEncoder,
     build_preprocessor,
     frame_to_xy,
     prepare_dataset,
@@ -46,6 +47,7 @@ __all__: List[str] = [
     "list_years",
     "frame_to_xy",
     "build_preprocessor",
+    "LeaveOneOutEncoder",
     "preprocess_xy",
     "split_xy",
     "prepare_dataset",
@@ -55,7 +57,7 @@ __all__: List[str] = [
     "prepare_regression_splits",
     "RegressionSplits",
 ]
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 _logger = logging.getLogger("exioml")
 
