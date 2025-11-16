@@ -29,6 +29,14 @@ import os
 from typing import Iterable, List
 
 from .factors import load_factor, list_regions, list_years
+from .datasets import (
+    DatasetSplit,
+    build_preprocessor,
+    frame_to_xy,
+    prepare_dataset,
+    preprocess_xy,
+    split_xy,
+)
 from .preprocessing import RegressionSplits, prepare_regression_splits
 from .training import TrainingResult, train
 
@@ -36,6 +44,12 @@ __all__: List[str] = [
     "load_factor",
     "list_regions",
     "list_years",
+    "frame_to_xy",
+    "build_preprocessor",
+    "preprocess_xy",
+    "split_xy",
+    "prepare_dataset",
+    "DatasetSplit",
     "train",
     "TrainingResult",
     "prepare_regression_splits",
