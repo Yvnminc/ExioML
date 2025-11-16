@@ -1,17 +1,25 @@
 # ExioML
-Repository for paper ExioML: Eco-economic dataset for Machine Learning in Global Sectoral Sustainability, accepted at ICLR 2024 Climate Change AI workshop
+ExioML is a production-grade, ML-friendly layer on top of Exiobase 3.8.2. It delivers PxP/IxI emission-factor tables across 49 regions and 28 years, bundles ML-ready preprocessing and splits, and ships as the official PyPI package `exioml`.
 
 ## Introduction
+Repository for paper ExioML: Eco-economic dataset for Machine Learning in Global Sectoral Sustainability, accepted at ICLR 2024 Climate Change AI workshop.
 
-ExioML is the first ML-ready benchmark dataset in Eco-economic research, named ExioML, for global sectoral sustainability analysis to fill the above research gaps. The overall architecture is illustrated in Figure: 
+ExioML is the first ML-ready benchmark dataset in Eco-economic research for global sectoral sustainability analysis. The overall architecture is illustrated below:
 
-![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/ExioML.png)
+![ExioML Architecture](https://github.com/Yvnminc/ExioML/blob/main/visualisations/ExioML.png)
 
-The ExioML is developed on top of the high-quality open-source EE-MRIO dataset ExioBase 3.8.2 with high spatiotemporal resolution, covering 163 sectors among 49 regions from 1995 to 2022, addressing the limitation in data inaccessibility. The EE-MRIO structure is described in following figure:
+Built on the high-quality open-source EE-MRIO dataset ExioBase 3.8.2 with high spatiotemporal resolution, ExioML covers 163 sectors across 49 regions from 1995 to 2022. The EE-MRIO structure is shown here:
 
-![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/EE_MRIO.png)
+![EE-MRIO Structure](https://github.com/Yvnminc/ExioML/blob/main/visualisations/EE_MRIO.png)
 
-Both factor accounting in tabular format and footprint network in graph structure are included in ExioML. We demonstrate a GHG emission regression task on a factor accounting table by comparing the performance between shallow and deep models. The result achieved the low Mean Squared Error (MSE). It quantified the sectoral GHG emission in terms of value-added, employment, and energy consumption, validating the proposed dataset's usability. The footprint network in ExioML is inherent in the multi-dimensional network structure of the MRIO framework and enables tracking resource flow between international sectors. Various promising research could be done by ExioML, such as predicting the embodied emission through international trade, estimation of regional sustainability transition, and the topological change of global trading networks based on historical trajectory. ExioML reduces the barrier and reduces the intensive data pre-processing for ML researchers with the ready-to-use features, simulates the corporation of ML and Eco-economic research for new algorithms, and provides analysis with new perspectives, contributing to making sound climate policy, and promotes global sustainable development.
+Both factor accounting tables and footprint networks are included. We demonstrate a GHG emission regression task comparing shallow and deep models; results achieve low MSE, quantifying sectoral GHG emission in terms of value-added, employment, and energy consumption. The footprint network enables tracking resource flow between international sectors and supports research such as embodied emission prediction via trade, regional transition estimation, and global trading network topology analysis. ExioML lowers preprocessing barriers for ML researchers and supports policy-relevant sustainability insights.
+
+## Highlights
+- One-line install: `pip install exioml`, plus CLI entry (`exioml` or `python -m exioml --list-regions`) to inspect regions/years.
+- `load_factor` lazily fetches and caches PxP/IxI factor tables with column aliasing and hash checks.
+- Unified X/y preparation: `frame_to_xy`, `build_preprocessor`, `preprocess_xy`, `split_xy`, `prepare_dataset` provide leave-one-out target encoding for categoricals and scaling for numerics by default.
+- pymrio compatible: direct MRIO → tidy factors → ML splits (`notebooks/pymrio_demo.ipynb`).
+- Baseline shallow/deep models (GBDT, GANDALF, etc.) with reproducible splits.
 
 ## PyPI Package Usage
 
@@ -19,9 +27,9 @@ Both factor accounting in tabular format and footprint network in graph structu
 
 ```bash
 pip install exioml
+# Developer install (shares local data/ assets)
+pip install -e .
 ```
-
-Development checkouts can be installed with `pip install -e .`, exposing the same API while reading the CSV assets from the repository `data/` directory or a custom path referenced through `EXIOML_DATA_DIR`.
 
 ### Loading emission-factor tables
 
@@ -47,7 +55,7 @@ Sample output:
 | PxP      | AT       | Oil seeds               |   1995 |     1.60796e+08 |    1.60796e+08 |           102.858  |             265.091 |        2.9306  |
 | PxP      | AT       | Sugar cane, sugar beet  |   1995 |     1.00478e+08 |    1.00478e+08 |            31.7525 |             219.926 |        3.14141 |
 
-`factor_value` mirrors the canonical greenhouse-gas column so downstream pipelines can rely on a stable field name regardless of the CSV header formatting.
+`factor_value` mirrors the canonical greenhouse-gas column so downstream pipelines can rely on a stable field name regardless of CSV header formatting.
 
 ### Preparing regression-ready splits
 
@@ -94,11 +102,9 @@ Typical metrics for the Austrian 1995 PxP slice are:
 }
 ```
 
-The magnitude reflects kilograms of CO₂-equivalent; apply logarithmic transforms if you need to stabilize error scales. The `train` helper accepts `model="gdbt" | "random_forest" | "ridge"` or any scikit-learn estimator instance, and `param_grid` enables a GridSearchCV run before exporting a `TrainingResult` container with prediction helpers and cross-validation diagnostics.
+The magnitude reflects kilograms of CO₂-equivalent; apply logarithmic transforms if you need to stabilize error scales. The `train` helper accepts `model="gdbt" | "random_forest" | "ridge"` or any scikit-learn estimator instance; `param_grid` enables GridSearchCV before exporting a `TrainingResult` with prediction helpers and cross-validation diagnostics.
 
 ### Command-line inspection
-
-The CLI exposed through `python -m exioml` mirrors the Python API for quick checks:
 
 ```bash
 python -m exioml --list-regions --schema PxP | head -n 5
@@ -117,8 +123,6 @@ schema region                  sector  year  ghg_emissions  factor_value  energy
 
 ### Repository training entry points
 
-Use the in-repo orchestration utilities to replicate the workshop benchmarks without leaving the CLI:
-
 ```bash
 python - <<'PY'
 from src.train import ShallowModel
@@ -130,86 +134,157 @@ PY
 
 `ShallowModel` and `DeepModel` respect the PxP/IxI splits implemented in `src/data.py`, shuffle features with seeded reproducibility, and report wall-clock time plus MSE so you can compare against the published GBDT and GANDALF baselines.
 
+## Quickstart Examples
+
+### 1) Factor table + decision tree grid search (`notebooks/exioml_demo.ipynb`)
+
+```python
+from exioml import load_factor, list_regions, list_years
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.tree import DecisionTreeRegressor
+import numpy as np
+
+years = list_years("PxP")
+regions = list_regions("PxP")
+frame = load_factor(
+    schema="PxP",
+    years=[2010, 2011, 2012],
+    regions=["US", "CN", "DE", "JP"],
+    columns=["value_added_meur", "employment_k", "energy_carrier_tj"],
+).dropna()
+
+# Log-scale numeric columns
+num_cols = frame.select_dtypes(include=[np.number]).columns.tolist()
+frame[num_cols] = frame[num_cols].apply(np.log1p)
+
+X = frame[["region", "sector", "year", "employment_k", "energy_carrier_tj", "value_added_meur"]]
+y = frame["factor_value"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+preprocess = ColumnTransformer([
+    ("categorical", OneHotEncoder(handle_unknown="ignore"), ["region", "sector"]),
+    ("numeric", "passthrough", ["year", "employment_k", "energy_carrier_tj", "value_added_meur"]),
+])
+
+grid = GridSearchCV(
+    Pipeline([("preprocess", preprocess), ("model", DecisionTreeRegressor(random_state=42))]),
+    param_grid={
+        "model__max_depth": [4, 6, None],
+        "model__min_samples_split": [2, 10],
+        "model__min_samples_leaf": [1, 5],
+    },
+    scoring="neg_mean_squared_error",
+    cv=3,
+    n_jobs=-1,
+)
+grid.fit(X_train, y_train)
+print("Best params:", grid.best_params_)
+test_mse = mean_squared_error(y_test, grid.best_estimator_.predict(X_test))
+print("Test MSE:", test_mse)
+```
+
+### 2) pymrio × ExioML end-to-end (`notebooks/pymrio_demo.ipynb`)
+
+```python
+import pandas as pd
+import pymrio
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+from exioml.datasets import prepare_dataset
+
+mrio = pymrio.load_test()
+mrio.calc_all()
+ext = mrio.emissions.F
+
+factors = ext.stack(["region", "sector"]).reset_index().rename(columns={0: "emission"})
+factors["region_code"] = pd.factorize(factors["region"])[0].astype("float32")
+factors["sector_code"] = pd.factorize(factors["sector"])[0].astype("float32")
+
+sample = factors.sample(min(120, len(factors)), random_state=0)
+feature_cols = ["region", "sector", "region_code", "sector_code"]
+
+splits, preproc = prepare_dataset(
+    sample,
+    feature_cols=feature_cols,
+    target_col="emission",
+    categorical_cols=["region", "sector"],
+    ratios=(0.7, 0.15, 0.15),
+    stratify=False,
+)
+
+model = HistGradientBoostingRegressor(random_state=0).fit(splits.x_train, splits.y_train)
+
+def report(split, X, y):
+    preds = model.predict(X)
+    return {"split": split, "mae": mean_absolute_error(y, preds), "r2": r2_score(y, preds)}
+
+print(pd.DataFrame([
+    report("train", splits.x_train, splits.y_train),
+    report("val", splits.x_val, splits.y_val),
+    report("test", splits.x_test, splits.y_test),
+]))
+```
+
+## X/y Preparation API
+- `frame_to_xy(df, feature_cols, target_col, ...)`: validate required columns, configure NA handling, return numpy or DataFrame.
+- `build_preprocessor(strategy="standard"|"minmax", imputer="drop"|"median", categorical_cols=..., leave_one_out=True)`: build preprocessing pipeline; default leave-one-out encoding + scaling.
+- `preprocess_xy(X, y, preprocessor)`: fit/transform while keeping X/y aligned.
+- `split_xy(X, y, train_ratio=0.6, val_ratio=0.2, test_ratio=0.2, stratify=True)`: two-stage split with stratified fallback.
+- `prepare_dataset(...)`: one-stop call returning `DatasetSplit` and the fitted preprocessor.
+
 ## Dataset
 
-ExioML supports graph and tabular structure learning algorithms by Footprint Network and Factor Accounting table. The factors included in PxP and IxI in ExioML are detailed:
+ExioML supports both graph and tabular learning via footprint networks and factor accounting tables. Factors in PxP/IxI include:
 
-- `Region (Categorical feature)`: 49 regions with region code (e.g. AU, US, CN)
-- `Sector (Categorical feature)`: Product (200) or industry (163) (e.g. biogasoline, construction)
-- `Value Added [M.EUR] (Numerical feature)`: Value added in million of Euros
-- `Employment [1000 p.] (Numerical feature)`: Population engaged in thousands of persons
-- `GHG emissions [kg CO2 eq.] (Numerical feature)`: GHG emissions in kilograms of CO$_2$ equivalent
-- `Energy Carrier Net Total [TJ] (Numerical feature)`: Sum of all energy carriers in Terajoules
-- `Year (Numerical feature)`: 28 Timesteps (e.g. 1995, 2022)
+- `Region (Categorical feature)`: 49 regions with region code (e.g., AU, US, CN)
+- `Sector (Categorical feature)`: Product (200) or industry (163) (e.g., biogasoline, construction)
+- `Value Added [M.EUR] (Numerical feature)`
+- `Employment [1000 p.] (Numerical feature)`
+- `GHG emissions [kg CO2 eq.] (Numerical feature)`
+- `Energy Carrier Net Total [TJ] (Numerical feature)`
+- `Year (Numerical feature)`: 28 timesteps (1995–2022)
 
-Due to size limited in the repository, the Footprint Network is not included in the dataset. The full dataset is hosted by Zendo at the link: (https://zenodo.org/records/10604610).
+Due to size limits, the footprint network is hosted externally on Zenodo: https://zenodo.org/records/10604610.
 
 ### Footprint Network
 
-The Footprint Network models the high-dimensional global trading network, capturing its economic, social, and environmental impacts. This network is structured as a directed graph, where the directionality represents the sectoral input-output relationships, delineating sectors by their roles as sources (exporting) and targets (importing). The basic element in the ExioML Footprint Network is international trade across different sectors with different features such as value-added, emission amount, and energy input. The Footprint Network's potential pathway impact is learning the dependency of sectors in the global supply chain to identify critical sectors and paths for sustainability management and optimisation. 
+The footprint network captures directed sectoral input-output relationships across regions, with attributes such as value-added, emissions, and energy inputs. It enables tracing supply-chain dependencies and critical pathways for sustainability management.
 
-![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/footprint.png)
+![Footprint Network](https://github.com/Yvnminc/ExioML/blob/main/visualisations/footprint.png)
 
 ### Factor Accounting
 
-The second part of ExioML is the Factor Accounting table, which shares the common features with the Footprint Network and summarises the total heterogeneous characteristics of various sectors.
+Factor accounting tables summarize sector characteristics shared with the footprint network.
 
-![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/boxplot.png)
+![Boxplot](https://github.com/Yvnminc/ExioML/blob/main/visualisations/boxplot.png)
 
-![Example Image](https://github.com/Yvnminc/ExioML/blob/main/visualisations/pairplot.png)
+![Pairplot](https://github.com/Yvnminc/ExioML/blob/main/visualisations/pairplot.png)
 
-## File structures
-The file structure of this study is:
-
-```bash
-├── ExioML 
-│   ├──data
-│   │       ├── ExioML_factor_accounting_IxI.csv
-│   │       └── ExioML_factor_accounting_IxI.csv
-│   ├──src
-│   │       ├── data.py
-│   │       ├── model.py
-│   │       └── train.py
-│   │       ├── tune.py
-│   │       └── requirement.txt
-│   ├──supply_material
-│   │       ├── ExioML_slide.pdf
-│   │       └── ExioML-poster.pdf
-│   │       └── ExioML.pdf
-│   ├──notebooks
-│   │       ├── EDA.ipynb
-│   │       └── ExioML_toolkit.ipynb
-│   │       └── ExioML_shallow.ipynb
-│   │       └── ExioML_deep.ipynb
-└───└─────────────────────
-
+## Repository Layout (key paths)
+```
+├── data/ExioML_factor_accounting_{PxP,IxI}.csv       # Factor accounting tables
+├── notebooks/
+│   ├── exioml_demo.ipynb                             # PyPI + decision tree grid search
+│   ├── pymrio_demo.ipynb                             # pymrio → ExioML end-to-end
+│   ├── EDA.ipynb / ExioML_toolkit.ipynb              # Exploration and toolkit
+│   ├── ExioML_shallow.ipynb / ExioML_deep.ipynb      # Model walkthroughs
+├── src/
+│   ├── data.py / model.py / train.py / tune.py        # Workshop experiment pipeline
+│   └── exioml/                                        # PyPI package source
+│       ├── __init__.py / cli.py / __main__.py         # Public API and CLI entry points
+│       ├── data_io.py / factors.py                    # Factor loading and caching
+│       ├── datasets.py / preprocessing.py             # X/y conversion, preprocessing, splits
+│       └── training.py / logging_utils.py             # Training helpers and logging
+├── tests/                                            # pytest coverage for public API and preprocessing
+├── visualisations/                                   # Figures used in the paper
+└── supply_material/                                  # Slides and poster assets
 ```
 
-### data
-- **ExioML_factor_accounting_PxP.csv:** Sector accounting table by Product.
-- **ExioML_factor_accounting_IxI.csv:** Sector accounting table by Industry.
-
-### src
-- **data.py:** Data processing and loading.
-- **model.py:** Model definition.
-- **train.py:** Training script.
-- **tune.py:** Hyperparameter tuning script.
-- **requirement.txt:** Required packages.
-
-### supply_material
-- **ExioML_slide.pdf:** Presentation slides for ICLR 2024 Climate Change AI.
-- **ExioML-poster.pdf:** Poster for ICLR 2024 Climate Change AI.
-- **ExioML.pdf:** Paper for ICLR 2024 Climate Change AI.
-
-### notebooks
-- **EDA.ipynb:** Exploratory data analysis.
-- **ExioML_toolkit.ipynb:** Toolkit for creating ExioML dataset.
-- **ExioML_shallow.ipynb:** Shallow model training.
-- **ExioML_deep.ipynb:** Deep model training.
-
-## Additional Information
-### Citation
-More details of the dataset are introduced in our paper: ExioML.
+## Citation
 
 ```
 @article{guo2024exioml,
@@ -220,7 +295,5 @@ More details of the dataset are introduced in our paper: ExioML.
 }
 ```
 
-### Source data
-`Exiobase` 3.8.2 is available via the [link](https://www.exiobase.eu/index.php/about-exiobase).
-
-The developers of `Exiobase` program proposed the `Pymrio` toolkit for pre-processing of MRIO table. It is the open source code could be accessed via the [link](https://github.com/IndEcol/pymrio/tree/master).
+## Source Data
+Exiobase 3.8.2 is available via https://www.exiobase.eu/index.php/about-exiobase. The Exiobase developers provide the open-source `pymrio` toolkit for MRIO preprocessing: https://github.com/IndEcol/pymrio/tree/master.
