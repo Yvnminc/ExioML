@@ -1,3 +1,5 @@
+
+
 # ExioML
 ExioML is a production-grade, ML-friendly layer on top of Exiobase 3.8.2. It delivers PxP/IxI emission-factor tables across 49 regions and 28 years, bundles ML-ready preprocessing and splits, and ships as the official PyPI package `exioml`.
 
@@ -29,6 +31,8 @@ Both factor accounting tables and footprint networks are included. We demonstrat
 pip install exioml
 # Developer install (shares local data/ assets)
 pip install -e .
+# Optional extras (Polars/PyArrow backends)
+# pip install exioml[polars]
 ```
 
 ### Loading emission-factor tables
